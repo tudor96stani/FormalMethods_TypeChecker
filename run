@@ -1,0 +1,8 @@
+#!/bin/bash
+ocamlc -o out $@
+ocamlrun out
+for i in "$@"; do
+    IFS='.' read -ra name <<< "$i"
+    rm "$name".cmi "$name".cmo
+done
+rm out
