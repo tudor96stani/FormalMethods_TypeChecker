@@ -118,4 +118,29 @@ let () =
                   )
                 ] 
               ) 
-          in print_endline "abc"
+          in 
+          let _ = ("Main","Object",[],
+          [(Tprim (Tvoid)),"main",[],
+            Bvar(
+              (Tclass ("B")), "o1",
+              Seq(AsgnV ("o1",NewObj ("B",[Value (Int 0); Value (Vnull)])),
+                  Blk (
+                    Bvar(
+                      (Tclass ("A")), "o2",
+                      Seq(AsgnV ("o2",NewObj ("A",[Value (Int 2)])),
+                      Blk (
+                        Bvar(
+                        (Tclass ("A")), "o3",
+                          Seq(AsgnV ("o3",NewObj ("A",[Value (Int 3)])),
+                              AsgnV ("o2", MethInv ("o1","m2",[Var ("o2"); Var ("o3")]))
+                      )
+                    )
+
+              )
+            )
+                    )
+                  )
+              )
+            )
+          
+          ]) in print_endline "abc"
