@@ -13,12 +13,13 @@ and
 vall = Vnull 
       | Int of int 
       | Float of float 
-      | Bool of bool | Vvoid 
+      | Bool of bool 
+      | Vvoid 
 and
 blkExp = Bvar of typ*string * exp 
         | Bnvar of exp 
 and
-varList = string list
+varList = exp list
 and
 exp = Value of vall 
       |Var of string 
@@ -77,4 +78,44 @@ let () =
         Seq (AsgnV ("c", AddInt(Var ("a"),Var ("b"))), Seq (AsgnF ("this","f1",
                                                             AddInt (Vfld ("this","c"), Var ("c"))), Var ("c")))
     )
-    ]) in print_newline ()
+    ]) in 
+    let _ = ("B","A",[(Tclass ("A")),"f2"],
+              [ (*Method declaration: string (return type) + parameter list + expression*)
+                (Tclass ("A")),
+                "m2",
+                [(Tclass ("A")),"x";(Tclass ("A")),"y"],
+                Bvar  
+                  ( 
+                    (Tclass ("A")), "z",
+                    Seq 
+                      (Blk 
+                        (
+                          Bvar 
+                          (
+                            (Tprim (Tint)), "n", 
+                              Seq 
+                              (
+                                AsgnV ("n",
+                                        DiffInt (MethInv ("x","m1",[Value (Int 1); Value (Int 2)]), MethInv ("y","m1",[Value (Int 2); Value (Int 1)]))
+                                      ), 
+                                Blk 
+                                (
+                                  Bvar 
+                                  (
+                                    (Tprim (Tbool)), "m", 
+                                    Seq 
+                                    (
+                                      AsgnV ("m",Gr (DiffInt (Vfld ("x","f1"),Vfld ("y","f1")),Var ("n"))),
+                                      If ("m", Bnvar (AsgnV ("z",NewObj ("A",[Var ("m")] )) ), Bnvar (AsgnV ("z",NewObj ("A",[Var ("n")]))))
+                                    )
+                                  ) 
+                                )
+                              )
+                            )
+                          ), 
+                        Seq (AsgnF ("this","f2",Var ("z")), Var ("z"))
+                      )
+                  )
+                ] 
+              ) 
+          in print_endline "abc"
