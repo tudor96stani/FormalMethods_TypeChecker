@@ -4,12 +4,6 @@ typ = Tprim of tPrim
       | Tclass of string 
       | Tbot 
 and
-fldDecl = typ * string 
-and
-fPrmList = fPrm list 
-and
-fPrm = (typ*string) 
-and
 vall = Vnull 
       | Int of int 
       | Float of float 
@@ -54,6 +48,12 @@ exp = Value of vall
 and
 mthDecl =(typ*string*fPrmList*blkExp) 
 and
+fldDecl = typ * string 
+and
+fPrmList = fPrm list 
+and
+fPrm = typ*string 
+and
 mthDeclList = mthDecl list 
 and
 fldDeclList = fldDecl list 
@@ -71,15 +71,15 @@ let () =
 *)
 
 (*Class A declaration*)
-let () = 
-  let _ = ("A","Object",[(Tprim (Tint)),"f1"],
-    [(Tprim (Tint)),"m1",[((Tprim (Tint)),"a"),((Tprim (Tint)),"b")],
+(*let generateAst = *)
+  let a = ("A","Object",[(Tprim (Tint)),"f1"],
+    [(Tprim (Tint)),"m1",[((Tprim (Tint)),"a");((Tprim (Tint)),"b")],
       Bvar ((Tprim (Tint)),"c",
         Seq (AsgnV ("c", AddInt(Var ("a"),Var ("b"))), Seq (AsgnF ("this","f1",
                                                             AddInt (Vfld ("this","c"), Var ("c"))), Var ("c")))
     )
-    ]) in 
-    let _ = ("B","A",[(Tclass ("A")),"f2"],
+    ]) 
+    let b = ("B","A",[(Tclass ("A")),"f2"],
               [ (*Method declaration: string (return type) + parameter list + expression*)
                 (Tclass ("A")),
                 "m2",
@@ -118,8 +118,8 @@ let () =
                   )
                 ] 
               ) 
-          in 
-          let _ = ("Main","Object",[],
+          
+          let main = ("Main","Object",[],
           [(Tprim (Tvoid)),"main",[],
             Bvar(
               (Tclass ("B")), "o1",
@@ -143,4 +143,28 @@ let () =
               )
             )
           
-          ]) in print_endline "abc"
+          ]);; (*in print_endline "abc"*)
+
+let print_bool b = match b with |true -> "true" | false -> "false";;
+
+let rec isClassInProgram prog cn = match prog with 
+	| [] -> false
+	| h::t -> (
+		match h with (n,cl) -> 
+			if n=cn
+			then true
+			else (isClassInProgram t cn)
+		  );;
+
+let subtype prog t1 t2 = match t1,t2 with
+	| Tprim(Tint),Tprim(Tint) -> true
+	| Tprim(Tfloat),Tprim(Tfloat) -> true
+	| Tprim(Tvoid),Tprim(Tvoid) -> true
+	| Tprim(Tbool),Tprim(Tbool) -> true
+	| Tbot,Tclass(cn) -> (isClassInProgram prog cn)
+	| Tclass(cn),Tclass("Object") -> (isClassInProgram prog cn)
+	| _,_ -> false
+
+
+let () = let ast = [("A",a);("B",b);("Main",main)] in 
+	Printf.printf "%s\n\n" (print_bool (subtype ast (Tclass ("A")) (Tclass ("Object") )))
