@@ -61,7 +61,8 @@ and
 classDecl = (string*string*fldDeclList*mthDeclList) 
 and
 progr= (string*classDecl) list;;
-
+exception VariableNotDefined of string;;
+exception IncompatibleTypes of string;;
 (*Course example
 let () = 
   let _ = If ("m",(Bnvar 
@@ -201,8 +202,73 @@ let rec fieldList prog cn = match cn with
   | "Object" -> []
   | i -> List.append (fieldList prog (parent prog i)) (getFieldList prog i)
 
+let rec getTypeFromEnv env v = match env with
+  | [] -> raise (VariableNotDefined v)
+  | (n,tp)::t when n=v -> tp
+  | _::t -> getTypeFromEnv t v
+
+let rec getFieldType fList fl = match fList with 
+  | [] -> raise (VariableNotDefined fl)
+  | (tp,n)::t when fl=n -> tp
+  | _::t -> getFieldType t fl
+
+let rec typeCheckExp prog env exp = match exp with
+  | Value (Vnull) -> Tbot
+  | Value (Int(v)) -> Tprim(Tint)
+  | Value (Float(v)) -> Tprim(Tfloat)
+  | Value (Bool(v)) -> Tprim(Tbool)
+  | Value (Vvoid) -> Tprim(Tvoid)
+  | Var (vn) -> getTypeFromEnv env vn
+  | Vfld (cn,f) -> if (isClassInProgram prog cn) then (getFieldType (fieldList prog cn) f) else raise (VariableNotDefined f)
+  | AsgnV (vn,e) -> (
+      let typeOfVn = (typeCheckExp prog env (Var (vn))) and typeOfE = (typeCheckExp prog env e) in
+        if subtype prog typeOfVn typeOfE
+          then  Tprim(Tvoid)
+          else raise (IncompatibleTypes "BAGAM AICI CEVA")
+      )
+  | AsgnF (cn,fn,e) -> if (isClassInProgram prog cn) 
+      then let typeOfFn = (getFieldType (fieldList prog cn) fn) and typeOfE = (typeCheckExp prog env e) in
+          if subtype prog typeOfFn typeOfE
+          then  Tprim(Tvoid)
+          else raise (IncompatibleTypes "BAGAM AICI CEVA")
+      else raise (VariableNotDefined fn)
+  | Blk (Bvar (tp,v,exp)) -> typeCheckExp prog ((v,tp)::env) exp 
+  | Blk (Bnvar (exp)) -> typeCheckExp prog env exp
+  | Seq (e1,e2) -> let _ = (typeCheckExp prog env e1) and typeE2 = (typeCheckExp prog env e2) in typeE2 
+  | AddInt (e1,e2) | MulInt (e1,e2) | DiffInt (e1,e2) | DivInt (e1,e2) -> let typeE1 = (typeCheckExp prog env e1) and typeE2 = (typeCheckExp prog env e2) in
+    if (subtype prog typeE1 (Tprim (Tint))) && (subtype prog typeE2 (Tprim (Tint)))
+      then (Tprim (Tint))
+      else raise (IncompatibleTypes "BAGAM AICI CEVA")
+  | AddFlt (e1,e2) | MulFlt (e1,e2) | DiffFlt (e1,e2) | DivFlt (e1,e2) -> let typeE1 = (typeCheckExp prog env e1) and typeE2 = (typeCheckExp prog env e2) in
+      if (subtype prog typeE1 (Tprim (Tfloat))) && (subtype prog typeE2 (Tprim (Tfloat)))
+        then (Tprim (Tfloat))
+        else raise (IncompatibleTypes "BAGAM AICI CEVA")
+  | LglAnd (e1,e2) | LglOr (e1,e2) -> let typeE1 = (typeCheckExp prog env e1) and typeE2 = (typeCheckExp prog env e2) in
+      if (subtype prog typeE1 (Tprim (Tbool))) && (subtype prog typeE2 (Tprim (Tbool)))
+      then (Tprim (Tbool))
+      else raise (IncompatibleTypes "BAGAM AICI CEVA")
+  | LglNeg (e) -> let te = typeCheckExp prog env e in 
+      if (subtype prog te (Tprim (Tbool))) 
+      then (Tprim (Tbool))
+      else raise (IncompatibleTypes "BAGAM AICI CEVA")
+  | Less(e1,e2) | LessEq(e1,e2) | Eq (e1,e2) | NEq (e1,e2) | GrEq (e1,e2) | Gr (e1,e2) ->
+    let t1 = (typeCheckExp prog env e1) and t2 = (typeCheckExp prog env e2) in
+    if ((subtype prog t1 t2) 
+      && (subtype prog t2 t1)
+       && (
+        match t1,t2 with
+        | Tclass (c1),Tclass (c2) -> (not (isClassInProgram prog c1)) && (not (isClassInProgram prog c2))
+        | Tclass (c), _ -> not (isClassInProgram prog c) 
+        | _, Tclass (c) ->  not (isClassInProgram prog c) 
+        | _ -> true
+      )) then (Tprim (Tbool))
+      else raise (IncompatibleTypes "BAGAM AICI CEVA")
+  | _ -> raise (VariableNotDefined "ABC")
+
+
+let ast = [("A",a);("B",b);("Main",main)]
 (* let () = let ast = [("A",a);("B",b);("Main",main)] in 
 	Printf.printf "%s\n\n" (print_bool (subtype ast (Tclass ("A")) (Tclass ("Object") ))) 
 
-let () = let ast = [("A",a);("B",b);("Main",main)] in 
+let () = 
 	Printf.printf "%s\n\n" (fieldList ast "B") *)
