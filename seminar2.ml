@@ -154,17 +154,55 @@ let rec isClassInProgram prog cn = match prog with
 			if n=cn
 			then true
 			else (isClassInProgram t cn)
-		  );;
+      );;
+      
+let rec isSubclass prog c1 c2 = match prog with
+  | [] -> false
+  | h::t -> (
+    match h with (n,cl) ->
+      if n=c1
+      then ( match cl with (_,p,_,_) -> p=c2 )
+      else (isSubclass t c1 c2)
+  );;
 
 let subtype prog t1 t2 = match t1,t2 with
 	| Tprim(Tint),Tprim(Tint) -> true
 	| Tprim(Tfloat),Tprim(Tfloat) -> true
 	| Tprim(Tvoid),Tprim(Tvoid) -> true
-	| Tprim(Tbool),Tprim(Tbool) -> true
+  | Tprim(Tbool),Tprim(Tbool) -> true
+  | Tbot,Tbot -> true
 	| Tbot,Tclass(cn) -> (isClassInProgram prog cn)
-	| Tclass(cn),Tclass("Object") -> (isClassInProgram prog cn)
+  | Tclass(cn),Tclass("Object") -> (isClassInProgram prog cn)
+  | Tclass(c1),Tclass(c2) when c1=c2 ->  (isClassInProgram prog c1) && (isClassInProgram prog c2)
+  | Tclass(c1),Tclass(c2) -> (isClassInProgram prog c1) && (isClassInProgram prog c2) && (isSubclass prog c1 c2)
+  
 	| _,_ -> false
 
+let rec parent prog cn = match prog with 
+  | [] -> ""
+  | h::t -> (
+    match h with (n,cl) -> 
+      if n=cn
+      then ( match cl with (_,p,_,_) -> p)
+      else (parent t cn)
+      );;
+    
+let rec getFieldList prog cn = match prog with 
+  | [] -> []
+  | h::t -> (
+    match h with (n,cl) -> 
+      if n=cn
+      then ( match cl with (_,_,f,_) -> f)
+      else (getFieldList t cn)
+    );;
+
+
+let rec fieldList prog cn = match cn with
+  | "Object" -> []
+  | i -> List.append (fieldList prog (parent prog i)) (getFieldList prog i)
+
+(* let () = let ast = [("A",a);("B",b);("Main",main)] in 
+	Printf.printf "%s\n\n" (print_bool (subtype ast (Tclass ("A")) (Tclass ("Object") ))) 
 
 let () = let ast = [("A",a);("B",b);("Main",main)] in 
-	Printf.printf "%s\n\n" (print_bool (subtype ast (Tclass ("A")) (Tclass ("Object") )))
+	Printf.printf "%s\n\n" (fieldList ast "B") *)
