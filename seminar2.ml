@@ -36,7 +36,7 @@ exp = Value of vall
       | LglNeg of exp
       | NewObj of string*varList
       | MethInv of string*string*varList
-      | WhileExp of string*string
+      | WhileExp of string*exp
       | Less of exp*exp
       | LessEq of exp*exp
       | Eq of exp*exp
@@ -197,6 +197,18 @@ let rec getFieldList prog cn = match prog with
       else (getFieldList t cn)
     );;
 
+(*Least common ancestor*)
+let rec lca l1 l2 a1 a2 = match l1,l2 with
+  | [],[] -> Tclass("Object")
+  | [h],h1::t1 | h1::t1,[h] -> if h <> h1 then Tclass(a1) else Tclass(h)
+  | h1::t1,h2::t2 -> if h1 <> h2 then Tclass(a1) else lca t1 t2 h1 h2
+  | _,_ -> raise (IncompatibleTypes "BAGAM AICI CEVA")
+
+let rec getDescentList prog cn = match cn with
+  | "Object" -> ["Object"]
+  | cn ->  List.append (getDescentList prog (parent prog cn)) [cn]
+
+
 
 let rec fieldList prog cn = match cn with
   | "Object" -> []
@@ -212,7 +224,12 @@ let rec getFieldType fList fl = match fList with
   | (tp,n)::t when fl=n -> tp
   | _::t -> getFieldType t fl
 
-let rec typeCheckExp prog env exp = match exp with
+let rec compareFields prog env l1 l2 = match l1,l2 with
+  | [],[] -> true
+  | (t,n)::t1,(e)::t2 -> (subtype prog t (typeCheckExp prog env e)) && (compareFields prog env t1 t2)
+  | _,_ -> false
+and
+typeCheckExp prog env exp = match exp with
   | Value (Vnull) -> Tbot
   | Value (Int(v)) -> Tprim(Tint)
   | Value (Float(v)) -> Tprim(Tfloat)
@@ -263,12 +280,51 @@ let rec typeCheckExp prog env exp = match exp with
         | _ -> true
       )) then (Tprim (Tbool))
       else raise (IncompatibleTypes "BAGAM AICI CEVA")
-  | _ -> raise (VariableNotDefined "ABC")
+  | If (v,e1,e2) -> 
+    let tv= (subtype prog (typeCheckExp prog env (Var (v))) (Tprim (Tbool))) and te1 = (typeCheckExp prog env (Blk (e1)))
+       and te2 = (typeCheckExp prog env (Blk (e2))) in 
+       if tv 
+       then 
+       (
+          match te1,te2 with 
+          | Tprim (Tint),Tprim (Tint) -> Tprim (Tint)
+          | Tprim (Tfloat),Tprim (Tfloat) -> Tprim (Tfloat)
+          | Tprim (Tbool),Tprim (Tbool) -> Tprim (Tbool)
+          | Tprim (Tvoid),Tprim (Tvoid) -> Tprim (Tint)
+          | Tbot, Tbot -> Tbot
+          | Tclass (c1), Tclass(c2) -> lca (getDescentList prog c1) (getDescentList prog c2) "Object" "Object"
+          | _,_ -> raise (IncompatibleTypes "BAGAM AICI CEVA")
+       )
+       else raise (IncompatibleTypes "BAGAM AICI CEVA")
+    | Cast (cn,v) -> let t = (typeCheckExp prog env (Var (v))) in
+        if (isClassInProgram prog cn) && ((subtype prog (Tclass(cn)) t) || (subtype prog t (Tclass (cn)))) 
+        then Tclass(cn)
+        else raise (IncompatibleTypes "BAGAM AICI CEVA")
+    | InstOf (v,cn) -> let t = (typeCheckExp prog env (Var (v))) in
+        if (isClassInProgram prog cn) && ((subtype prog (Tclass(cn)) t) || (subtype prog t (Tclass (cn)))) 
+        then Tprim (Tbool)
+        else raise (IncompatibleTypes "BAGAM AICI CEVA")
+    | NewObj (cn,vl) ->
+        if (isClassInProgram prog cn)
+        then
+        (
+          let fldlst = fieldList prog cn in
+            if compareFields prog env fldlst vl
+            then Tclass(cn)
+            else raise (IncompatibleTypes "BAGAM AICI CEVA")
+        )
+        else raise (IncompatibleTypes "BAGAM AICI CEVA")
+    | WhileExp (v,e) -> 
+      let tv= (subtype prog (typeCheckExp prog env (Var (v))) (Tprim (Tbool))) and _ = (typeCheckExp prog env e) in
+        if tv 
+        then Tprim (Tvoid) 
+        else raise (IncompatibleTypes "BAGAM AICI CEVA")
+    | _ -> raise (VariableNotDefined "ABC")  
 
 
-let ast = [("A",a);("B",b);("Main",main)]
+let ast = [("A",a);("B",b);("Main",main)]  
 (* let () = let ast = [("A",a);("B",b);("Main",main)] in 
-	Printf.printf "%s\n\n" (print_bool (subtype ast (Tclass ("A")) (Tclass ("Object") ))) 
+	Printf.printf "%s\n\n" (print_bool (subtype ast (Tclass ("A")) (Tclass ("Object") ))) *)
 
 let () = 
-	Printf.printf "%s\n\n" (fieldList ast "B") *)
+	Printf.printf "OK\n\n"
