@@ -163,6 +163,29 @@ let print_type = function
 	| Tclass (cn) -> "Tclass (" ^ cn ^ ")"
 
 
+let rem_from_right lst =
+    let rec is_member n mlst =
+      match mlst with
+      | [] -> false
+      | h::tl ->
+          begin
+            if h=n then true
+            else is_member n tl
+          end
+    in
+    let rec loop lbuf =
+      match lbuf with
+      | [] -> []
+      | h::tl ->
+          begin
+          let rbuf = loop tl
+          in
+            if is_member h rbuf then rbuf
+            else h::rbuf
+          end
+    in
+    loop lst
+
 (* Check if string cn is the name of a class in prog *)
 let rec isClassInProgram prog cn = match prog with 
 	| [] -> false
@@ -248,6 +271,21 @@ let rec getFieldType fList fl = match fList with
   | [] -> raise (VariableNotDefined fl)
   | (tp,n)::t when fl=n -> tp
   | _::t -> getFieldType t fl
+
+let rec getMethodFromClass (cn,parent,fldDeclList,mthDeclList)  m = match mthDeclList with
+  | [] -> raise (TypingException "Ceva")
+  | (tp,mn,pl,ex)::t when mn = m -> (tp,mn,pl,ex)
+  | _::t -> getMethodFromClass (cn,parent,fldDeclList,t) m
+
+let rec getParamListForMethodRec prog cn m = match prog with
+  | [] -> []
+  | (n,cl)::t when n = cn -> (match (getMethodFromClass cl m) with | (tp,mn,pl,ex) -> pl )
+  | _::t -> getParamListForMethodRec t cn m
+
+let rec getReturnTypeForMethodRec prog cn m = match prog with
+  | [] -> raise (TypingException "Ceva")
+  | (n,cl)::t when n = cn -> (match (getMethodFromClass cl m) with | (tp,mn,pl,ex) -> tp )
+  | _::t -> getReturnTypeForMethodRec t cn m
 
 (* Compare l1:(typ*string) list with l2:exp list to make sure that l1 is a subtype of l2 elementwise *)
 let rec compareFields prog env l1 l2 = match l1,l2 with
@@ -353,13 +391,80 @@ typeCheckExp prog env exp = match exp with
         if tv 
         then Tprim (Tvoid) 
         else raise (IncompatibleTypes (v ^ " must be of type bool"))
-    | _ -> raise (TypingException "Expression is not well typed")  
+    | MethInv(v,m,vl) -> let typeOfV = typeCheckExp prog env (Var (v)) in
+        if isClassInProgram prog v
+        then
+        (
+          if compareFields prog env (getParamListForMethodRec prog (match typeOfV with |Tclass(cn)-> cn |_-> "") m) vl
+          then (getReturnTypeForMethodRec prog (match typeOfV with |Tclass(cn)-> cn |_-> "") m)
+          else (raise (TypingException (v ^ " is not well defined")))
+        )
+        else raise (TypingException (v ^ " is not well defined"))  
+
+let rec addToEnv l env = match l with
+  | [] -> env
+  | (tp,n)::t -> addToEnv t ((n,tp)::env)
+
+let checkIfMethodIsWellTyped prog env (tp,mn,pl,ex) = 
+  let typeOfEx = typeCheckExp prog (addToEnv pl env) ex in
+    subtype prog typeOfEx tp
+
+let rec checkIfClassIsWellTyped prog (cn,pn,fl,ml) = match ml with
+  | [] -> true
+  | m::t -> (checkIfMethodIsWellTyped prog ["this",(Tclass (cn))] m) && (checkIfClassIsWellTyped prog (cn,pn,fl,t))
+
+
+let rec checkIfAllClassesWellTyped prog = match prog with
+  | [] -> true
+  | (n,c)::t -> (checkIfClassIsWellTyped prog c) && (checkIfAllClassesWellTyped t)
+
+let rec createListWithClassNames prog = match prog with
+  | [] -> []
+  | (n,_)::t -> n::(createListWithClassNames t)
+
+let rec createListWithFieldNames fl = match fl with 
+  | [] -> []
+  | (_,n)::t -> n::(createListWithFieldNames t)
+
+  let rec createListWithMethNames ml = match ml with 
+  | [] -> []
+  | (_,mn,_,_)::t -> mn::(createListWithMethNames t)
+
+let rec checkIfProgContainsNoDuplicateClasses prog = 
+  let cL1 = (createListWithClassNames prog) and cL2 = (rem_from_right (createListWithClassNames prog)) in
+    (List.length cL1) = (List.length cL2) 
+
+let checkIfClassContainsNoMethDuplicates prog (cn,pn,fl,ml) = 
+  let ml1 = (createListWithMethNames ml) and ml2 = (rem_from_right (createListWithMethNames ml)) in
+    (List.length ml1) = (List.length ml2) 
+
+let checkIfClassContainsNoFieldDuplicates prog (cn,pn,fl,ml) = 
+  let fl1 = (createListWithFieldNames fl) and fl2 = (rem_from_right (createListWithFieldNames fl)) in
+    (List.length fl1) = (List.length fl2) 
+
+let checkClassForDuplicates prog cl = (checkIfClassContainsNoMethDuplicates prog cl) && (checkIfClassContainsNoFieldDuplicates prog cl)
+
+let rec checkAllClassesForDuplicates prog = match prog with
+  | [] -> true
+  | (_,cl)::t -> (checkClassForDuplicates prog cl) && (checkAllClassesForDuplicates t)
+
+let rec checkIfLastClassIsMain prog = match prog with
+  | [] -> false
+  | [n,_] ->  n="Main" 
+  | _::t -> checkIfLastClassIsMain t
+
+let checkIfProgIsWellTyped prog =
+  (checkIfAllClassesWellTyped prog) && (checkIfProgContainsNoDuplicateClasses prog) && (checkAllClassesForDuplicates prog) && (checkIfLastClassIsMain prog)
+
+
 
 
 let ast = [("A",a);("B",b);("Main",main)]  
 (* let () = let ast = [("A",a);("B",b);("Main",main)] in 
 	Printf.printf "%s\n\n" (print_bool (subtype ast (Tclass ("A")) (Tclass ("Object") ))) *)
-
+(* 
 let () = 
 	let typeOfExpression = typeCheckExp ast ["m",Tprim (Tbool);"z",Tclass ("A")] (If ("m", Bnvar (AsgnV ("z",NewObj ("A",[Var ("m")] )) ), Bnvar (AsgnV ("z",NewObj ("A",[Var ("n")])))))  in 
-		Printf.printf "%s\n" (print_type typeOfExpression); Printf.printf "\nOK\n\n"
+    Printf.printf "%s\n" (print_type typeOfExpression); Printf.printf "\nOK\n\n" *)
+
+let () = Printf.printf "OK\n"
